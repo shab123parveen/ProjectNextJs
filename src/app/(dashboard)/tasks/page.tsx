@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -13,6 +13,7 @@ import {
   AlertCircle,
   Clock,
   CheckCircle2,
+  GripVertical,
 } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -61,16 +62,16 @@ const itemVariants = {
 };
 
 export default function TasksPage() {
-  const { tasks, projects, teamMembers, addTask, updateTask, deleteTask } =
+  const { tasks, projects, teamMembers, addTask, updateTask, deleteTask, addActivity } =
     useAppStore();
   const { toast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [draggedTask, setDraggedTask] = useState<Task | null>(null);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -82,20 +83,21 @@ export default function TasksPage() {
     dueDate: "",
   });
 
-  const filteredTasks = tasks.filter((task) => {
+  // Filter tasks based on search and project, but don't filter by status
+  const searchedTasks = tasks.filter((task) => {
     const matchesSearch = task.title
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === "all" || task.status === statusFilter;
     const matchesProject =
       projectFilter === "all" || task.projectId === projectFilter;
-    return matchesSearch && matchesStatus && matchesProject;
+    return matchesSearch && matchesProject;
   });
 
+  // Group all tasks by status (no status filter)
   const groupedTasks = {
-    todo: filteredTasks.filter((t) => t.status === "todo"),
-    "in-progress": filteredTasks.filter((t) => t.status === "in-progress"),
-    done: filteredTasks.filter((t) => t.status === "done"),
+    todo: searchedTasks.filter((t) => t.status === "todo"),
+    "in-progress": searchedTasks.filter((t) => t.status === "in-progress"),
+    done: searchedTasks.filter((t) => t.status === "done"),
   };
 
   const handleCreate = () => {
@@ -112,6 +114,15 @@ export default function TasksPage() {
       dueDate: formData.dueDate || new Date().toISOString().split("T")[0],
     });
 
+    // Add activity log
+    addActivity({
+      userId: "user-1",
+      userName: "You",
+      action: "created task",
+      target: formData.title,
+      type: "task",
+    });
+
     toast({
       title: "Task created successfully",
       variant: "success",
@@ -126,6 +137,14 @@ export default function TasksPage() {
 
     updateTask(selectedTask.id, formData);
 
+    addActivity({
+      userId: "user-1",
+      userName: "You",
+      action: "updated task",
+      target: selectedTask.title,
+      type: "task",
+    });
+
     toast({
       title: "Task updated successfully",
       variant: "success",
@@ -138,6 +157,13 @@ export default function TasksPage() {
 
   const handleDelete = (task: Task) => {
     deleteTask(task.id);
+    addActivity({
+      userId: "user-1",
+      userName: "You",
+      action: "deleted task",
+      target: task.title,
+      type: "task",
+    });
     toast({
       title: "Task deleted successfully",
       variant: "success",
@@ -146,13 +172,41 @@ export default function TasksPage() {
 
   const handleStatusChange = (task: Task, newStatus: Task["status"]) => {
     updateTask(task.id, { status: newStatus });
+    const actionText = newStatus === "done" ? "completed" : `moved to ${newStatus.replace("-", " ")}`;
+    addActivity({
+      userId: "user-1",
+      userName: "You",
+      action: actionText,
+      target: task.title,
+      type: "task",
+    });
     toast({
       title:
         newStatus === "done"
-          ? "Task completed!"
+          ? "Task completed! 🎉"
           : `Task moved to ${newStatus.replace("-", " ")}`,
       variant: "success",
     });
+  };
+
+  const handleDragStart = (task: Task) => {
+    setDraggedTask(task);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (status: Task["status"]) => {
+    if (draggedTask && draggedTask.status !== status) {
+      handleStatusChange(draggedTask, status);
+    }
+    setDraggedTask(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTask(null);
   };
 
   const openEditDialog = (task: Task) => {
@@ -211,16 +265,27 @@ export default function TasksPage() {
   const TaskCard = ({ task }: { task: Task }) => {
     const project = projects.find((p) => p.id === task.projectId);
     const assignee = teamMembers.find((m) => m.id === task.assigneeId);
+    const isDragged = draggedTask?.id === task.id;
 
     return (
-      <motion.div variants={itemVariants} layout>
-        <Card className="group transition-all hover:shadow-md">
+      <motion.div 
+        variants={itemVariants} 
+        layout
+        draggable
+        onDragStart={() => handleDragStart(task)}
+        onDragEnd={handleDragEnd}
+        className={isDragged ? "opacity-50" : ""}
+      >
+        <Card 
+          className="group transition-all hover:shadow-md cursor-move hover:scale-105 select-none"
+          onClick={() => openEditDialog(task)}
+        >
           <CardContent className="p-4">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-3">
-                {getStatusIcon(task.status)}
-                <div className="flex-1">
-                  <h4 className="font-medium text-gray-900 dark:text-white">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-start gap-2 flex-1 min-w-0">
+                <GripVertical className="h-4 w-4 text-gray-400 flex-shrink-0 mt-1" />
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-gray-900 dark:text-white truncate">
                     {task.title}
                   </h4>
                   <p className="mt-1 line-clamp-2 text-sm text-gray-500 dark:text-gray-400">
@@ -229,11 +294,11 @@ export default function TasksPage() {
                 </div>
               </div>
               <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-8 w-8 opacity-0 group-hover:opacity-100"
+                    className="h-8 w-8 opacity-0 group-hover:opacity-100 flex-shrink-0"
                   >
                     <MoreVertical className="h-4 w-4" />
                   </Button>
@@ -241,31 +306,48 @@ export default function TasksPage() {
                 <DropdownMenuContent align="end">
                   {task.status !== "todo" && (
                     <DropdownMenuItem
-                      onClick={() => handleStatusChange(task, "todo")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStatusChange(task, "todo");
+                      }}
                     >
                       Move to Todo
                     </DropdownMenuItem>
                   )}
                   {task.status !== "in-progress" && (
                     <DropdownMenuItem
-                      onClick={() => handleStatusChange(task, "in-progress")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStatusChange(task, "in-progress");
+                      }}
                     >
                       Move to In Progress
                     </DropdownMenuItem>
                   )}
                   {task.status !== "done" && (
                     <DropdownMenuItem
-                      onClick={() => handleStatusChange(task, "done")}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleStatusChange(task, "done");
+                      }}
                     >
                       Mark Complete
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={() => openEditDialog(task)}>
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openEditDialog(task);
+                    }}
+                  >
                     <Edit2 className="mr-2 h-4 w-4" />
                     Edit
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() => handleDelete(task)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(task);
+                    }}
                     className="text-red-600 focus:text-red-700"
                   >
                     <Trash2 className="mr-2 h-4 w-4" />
@@ -313,7 +395,7 @@ export default function TasksPage() {
     <div className="min-h-screen">
       <Header
         title="Tasks"
-        description="Manage and track all your tasks across projects."
+        description="Manage and track all your tasks across projects. Drag cards between columns to change status."
       />
 
       <div className="p-6">
@@ -329,17 +411,6 @@ export default function TasksPage() {
                 className="pl-10"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="todo">To Do</SelectItem>
-                <SelectItem value="in-progress">In Progress</SelectItem>
-                <SelectItem value="done">Done</SelectItem>
-              </SelectContent>
-            </Select>
             <Select value={projectFilter} onValueChange={setProjectFilter}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Project" />
@@ -369,11 +440,16 @@ export default function TasksPage() {
               { key: "done", title: "Done", color: "bg-green-500" },
             ] as const
           ).map(({ key, title, color }) => (
-            <Card key={key} className="bg-gray-50/50 dark:bg-gray-900/50">
-              <CardHeader className="pb-3">
+            <Card 
+              key={key} 
+              className="bg-gray-50/50 dark:bg-gray-900/50 min-h-[600px] flex flex-col"
+              onDragOver={handleDragOver}
+              onDrop={() => handleDrop(key)}
+            >
+              <CardHeader className="pb-3 sticky top-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className={`h-2 w-2 rounded-full ${color}`} />
+                    <div className={`h-3 w-3 rounded-full ${color}`} />
                     <CardTitle className="text-sm font-medium">
                       {title}
                     </CardTitle>
@@ -381,7 +457,7 @@ export default function TasksPage() {
                   <Badge variant="outline">{groupedTasks[key].length}</Badge>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="flex-1 overflow-y-auto">
                 <motion.div
                   variants={containerVariants}
                   initial="hidden"
@@ -389,16 +465,17 @@ export default function TasksPage() {
                   className="space-y-3"
                 >
                   <AnimatePresence mode="popLayout">
-                    {groupedTasks[key].map((task) => (
-                      <TaskCard key={task.id} task={task} />
-                    ))}
+                    {groupedTasks[key].length > 0 ? (
+                      groupedTasks[key].map((task) => (
+                        <TaskCard key={task.id} task={task} />
+                      ))
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-gray-200 p-8 text-center dark:border-gray-700">
+                        <CheckSquare className="mx-auto h-8 w-8 text-gray-300 dark:text-gray-600" />
+                        <p className="mt-2 text-sm text-gray-500">Drag tasks here</p>
+                      </div>
+                    )}
                   </AnimatePresence>
-                  {groupedTasks[key].length === 0 && (
-                    <div className="rounded-lg border border-dashed border-gray-200 p-6 text-center dark:border-gray-700">
-                      <CheckSquare className="mx-auto h-8 w-8 text-gray-300 dark:text-gray-600" />
-                      <p className="mt-2 text-sm text-gray-500">No tasks</p>
-                    </div>
-                  )}
                 </motion.div>
               </CardContent>
             </Card>

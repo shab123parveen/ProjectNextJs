@@ -60,7 +60,7 @@ const itemVariants = {
 };
 
 export default function ProjectsPage() {
-  const { projects, teamMembers, addProject, updateProject, deleteProject } =
+  const { projects, teamMembers, addProject, updateProject, deleteProject, addActivity } =
     useAppStore();
   const { toast } = useToast();
 
@@ -103,6 +103,15 @@ export default function ProjectsPage() {
       dueDate: formData.dueDate || new Date().toISOString().split("T")[0],
       teamMembers: [],
       color: getRandomColor(),
+    });
+
+    // Add activity log
+    addActivity({
+      userId: "user-1",
+      userName: "You",
+      action: "created project",
+      target: formData.name,
+      type: "project",
     });
 
     toast({
@@ -234,7 +243,10 @@ export default function ProjectsPage() {
                 layout
                 exit={{ opacity: 0, scale: 0.9 }}
               >
-                <Card className="group relative overflow-hidden">
+                <Card 
+                  className="group relative overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:scale-105"
+                  onClick={() => openEditDialog(project)}
+                >
                   <div
                     className={`absolute top-0 left-0 h-1 w-full ${project.color}`}
                   />

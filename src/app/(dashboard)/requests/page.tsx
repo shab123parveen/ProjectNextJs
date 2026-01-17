@@ -43,7 +43,7 @@ const itemVariants = {
 };
 
 export default function RequestsPage() {
-  const { clientRequests, updateRequestStatus } = useAppStore();
+  const { clientRequests, updateRequestStatus, addActivity } = useAppStore();
   const { toast } = useToast();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -63,6 +63,13 @@ export default function RequestsPage() {
 
   const handleApprove = (request: ClientRequest) => {
     updateRequestStatus(request.id, "approved");
+    addActivity({
+      userId: "user-1",
+      userName: "You",
+      action: "approved request from",
+      target: request.clientName,
+      type: "request",
+    });
     toast({
       title: "Request Approved",
       description: `Request from ${request.clientName} has been approved.`,
@@ -72,6 +79,13 @@ export default function RequestsPage() {
 
   const handleReject = (request: ClientRequest) => {
     updateRequestStatus(request.id, "rejected");
+    addActivity({
+      userId: "user-1",
+      userName: "You",
+      action: "rejected request from",
+      target: request.clientName,
+      type: "request",
+    });
     toast({
       title: "Request Rejected",
       description: `Request from ${request.clientName} has been rejected.`,
@@ -230,7 +244,7 @@ export default function RequestsPage() {
                 layout
                 exit={{ opacity: 0, x: -20 }}
               >
-                <Card className="transition-all hover:shadow-md">
+                <Card className="transition-all hover:shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900/50">
                   <CardContent className="p-6">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="flex-1">

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import {
   FolderKanban,
@@ -27,10 +28,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useAppStore } from "@/lib/store";
-import {
-  weeklyProgressData,
-  taskDistributionData,
-} from "@/lib/mock-data";
 import { getInitials, formatTime } from "@/lib/utils";
 
 const containerVariants = {
@@ -48,41 +45,177 @@ const itemVariants = {
   visible: { opacity: 1, y: 0 },
 };
 
-export default function DashboardPage() {
-  const { projects, tasks, teamMembers, clientRequests, activities } = useAppStore();
+interface StatItem {
+  title: string;
+  value: number;
+  change: string;
+  trend: "up" | "down";
+  icon: any;
+  color: string;
+}
 
-  const stats = [
+export default function DashboardPage() {
+  const { projects, tasks, teamMembers, clientRequests, activities, updateTask, updateProject, addActivity } = useAppStore();
+  const [chartData, setChartData] = useState<
+    { name: string; tasks: number; completed: number }[]
+  >([]);
+  const [stats, setStats] = useState<StatItem[]>([]);
+
+  // Initialize chart data from tasks
+  const generateChartData = () => {
+    const today = new Date();
+    const data = [];
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    
+    for (let i = 0; i < 7; i++) {
+      const dayIndex = (today.getDay() - 7 + i + 1) % 7;
+      data.push({
+        name: days[dayIndex],
+        tasks: Math.floor(Math.random() * 15) + 10,
+        completed: Math.floor(Math.random() * 12) + 5,
+      });
+    }
+    return data;
+  };
+
+  // Generate stats with random values (client-side only)
+  const generateStats = () => {
+    return [
+      {
+        title: "Total Projects",
+        value: projects.length,
+        change: `+${Math.floor(Math.random() * 3) + 1}%`,
+        trend: "up" as const,
+        icon: FolderKanban,
+        color: "from-blue-500 to-indigo-500",
+      },
+      {
+        title: "Active Tasks",
+        value: tasks.filter((t) => t.status !== "done").length,
+        change: `+${Math.floor(Math.random() * 5) + 1}%`,
+        trend: "up" as const,
+        icon: CheckSquare,
+        color: "from-green-500 to-emerald-500",
+      },
+      {
+        title: "Team Members",
+        value: teamMembers.length,
+        change: `+${Math.floor(Math.random() * 3)}`,
+        trend: teamMembers.length > 5 ? ("up" as const) : ("down" as const),
+        icon: Users,
+        color: "from-purple-500 to-pink-500",
+      },
+      {
+        title: "Pending Requests",
+        value: clientRequests.filter((r) => r.status === "pending").length,
+        change: `-${Math.floor(Math.random() * 2) + 1}`,
+        trend: "down" as const,
+        icon: MessageSquare,
+        color: "from-orange-500 to-red-500",
+      },
+    ];
+  };
+
+  useEffect(() => {
+    setChartData(generateChartData());
+    setStats(generateStats());
+  }, [projects, tasks, teamMembers, clientRequests]);
+
+  // Simulate real-time updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Randomly update task status
+      const incompleteTasks = tasks.filter(
+        (t) => t.status !== "done"
+      );
+      if (incompleteTasks.length > 0) {
+        const randomTask =
+          incompleteTasks[
+            Math.floor(Math.random() * incompleteTasks.length)
+          ];
+        const statuses = ["todo", "in-progress", "done"];
+        const currentIndex = statuses.indexOf(randomTask.status);
+        const nextStatus =
+          statuses[(currentIndex + 1) % statuses.length];
+
+        updateTask(randomTask.id, { status: nextStatus as any });
+
+        // Add activity
+        const statusMessages = {
+          "in-progress": "started working on",
+          "done": "completed",
+          "todo": "moved to todo",
+        };
+        addActivity({
+          userId: randomTask.assigneeId,
+          userName:
+            teamMembers.find((m) => m.id === randomTask.assigneeId)?.name ||
+            "Unknown",
+          action: statusMessages[nextStatus as keyof typeof statusMessages],
+          target: randomTask.title,
+          type: "task",
+        });
+      }
+
+      // Randomly update project progress
+      const activeProjects = projects.filter(
+        (p) => p.status === "active" && p.progress < 100
+      );
+      if (activeProjects.length > 0) {
+        const randomProject =
+          activeProjects[Math.floor(Math.random() * activeProjects.length)];
+        const newProgress = Math.min(
+          randomProject.progress + Math.floor(Math.random() * 5) + 1,
+          100
+        );
+        updateProject(randomProject.id, { progress: newProgress });
+
+        if (newProgress === 100) {
+          updateProject(randomProject.id, { status: "completed" });
+          addActivity({
+            userId: "tm-6",
+            userName: "David Kim",
+            action: "completed project",
+            target: randomProject.name,
+            type: "project",
+          });
+        }
+      }
+
+      // Update chart data
+      setChartData((prev) => {
+        const newData = [...prev];
+        newData.shift();
+        newData.push({
+          name: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][
+            Math.floor(Math.random() * 7)
+          ],
+          tasks: Math.floor(Math.random() * 15) + 10,
+          completed: Math.floor(Math.random() * 12) + 5,
+        });
+        return newData;
+      });
+    }, 4000); // Update every 4 seconds
+
+    return () => clearInterval(interval);
+  }, [tasks, projects, teamMembers, updateTask, updateProject, addActivity]);
+
+  // Calculate task distribution from actual tasks
+  const taskDistribution = [
     {
-      title: "Total Projects",
-      value: projects.length,
-      change: "+12%",
-      trend: "up",
-      icon: FolderKanban,
-      color: "from-blue-500 to-indigo-500",
+      name: "Completed",
+      value: tasks.filter((t) => t.status === "done").length,
+      color: "#10b981",
     },
     {
-      title: "Active Tasks",
-      value: tasks.filter((t) => t.status !== "done").length,
-      change: "+8%",
-      trend: "up",
-      icon: CheckSquare,
-      color: "from-green-500 to-emerald-500",
+      name: "In Progress",
+      value: tasks.filter((t) => t.status === "in-progress").length,
+      color: "#3b82f6",
     },
     {
-      title: "Team Members",
-      value: teamMembers.length,
-      change: "+2",
-      trend: "up",
-      icon: Users,
-      color: "from-purple-500 to-pink-500",
-    },
-    {
-      title: "Pending Requests",
-      value: clientRequests.filter((r) => r.status === "pending").length,
-      change: "-3",
-      trend: "down",
-      icon: MessageSquare,
-      color: "from-orange-500 to-red-500",
+      name: "To Do",
+      value: tasks.filter((t) => t.status === "todo").length,
+      color: "#6b7280",
     },
   ];
 
@@ -160,7 +293,7 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={weeklyProgressData}>
+                    <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis
                         dataKey="name"
@@ -213,7 +346,7 @@ export default function DashboardPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={taskDistributionData}
+                        data={taskDistribution}
                         cx="50%"
                         cy="50%"
                         innerRadius={60}
@@ -221,7 +354,7 @@ export default function DashboardPage() {
                         paddingAngle={5}
                         dataKey="value"
                       >
-                        {taskDistributionData.map((entry, index) => (
+                        {taskDistribution.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
@@ -236,14 +369,14 @@ export default function DashboardPage() {
                   </ResponsiveContainer>
                 </div>
                 <div className="mt-4 flex justify-center gap-6">
-                  {taskDistributionData.map((item) => (
+                  {taskDistribution.map((item) => (
                     <div key={item.name} className="flex items-center gap-2">
                       <div
                         className="h-3 w-3 rounded-full"
                         style={{ backgroundColor: item.color }}
                       />
                       <span className="text-sm text-gray-600 dark:text-gray-400">
-                        {item.name}
+                        {item.name} ({item.value})
                       </span>
                     </div>
                   ))}

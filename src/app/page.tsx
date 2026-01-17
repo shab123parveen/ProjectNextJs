@@ -184,7 +184,7 @@ export default function LandingPage() {
                           <div className="h-4 w-4 rounded bg-gray-200 dark:bg-gray-700" />
                           <div
                             className="h-4 rounded bg-gray-200 dark:bg-gray-700"
-                            style={{ width: `${60 + Math.random() * 30}%` }}
+                            style={{ width: `${60 + (i * 7) % 30}%` }}
                           />
                         </div>
                       ))}

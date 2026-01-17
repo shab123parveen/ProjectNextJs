@@ -88,7 +88,12 @@ export function Sidebar() {
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setCollapsed(true)}
+                onClick={(e) => {
+                  // Only collapse on mobile (less than lg breakpoint)
+                  if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                    setCollapsed(true);
+                  }
+                }}
                 className={cn(
                   "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
                   isActive

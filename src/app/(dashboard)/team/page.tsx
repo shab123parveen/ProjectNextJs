@@ -58,7 +58,7 @@ const itemVariants = {
 };
 
 export default function TeamPage() {
-  const { teamMembers, addTeamMember, updateTeamMember, removeTeamMember } =
+  const { teamMembers, addTeamMember, updateTeamMember, removeTeamMember, addActivity } =
     useAppStore();
   const { toast } = useToast();
 
@@ -98,6 +98,15 @@ export default function TeamPage() {
     }
 
     addTeamMember(formData);
+
+    // Add activity log
+    addActivity({
+      userId: "user-1",
+      userName: "You",
+      action: "added team member",
+      target: formData.name,
+      type: "team",
+    });
 
     toast({
       title: "Team member added successfully",
@@ -288,7 +297,10 @@ export default function TeamPage() {
                 layout
                 exit={{ opacity: 0, scale: 0.9 }}
               >
-                <Card className="group relative overflow-hidden">
+                <Card 
+                  className="group relative overflow-hidden cursor-pointer transition-all hover:shadow-lg hover:scale-105"
+                  onClick={() => openEditDialog(member)}
+                >
                   <CardContent className="p-6 text-center">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
